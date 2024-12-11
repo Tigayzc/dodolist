@@ -12,10 +12,39 @@ interface Todo {
     done: boolean;
 }
 
+interface List {
+    id: string;
+    userID: string;
+    name: string;
+}
+
 export default function DashboardPage() {
+    const [lists, setLists] = useState<List[]>([]);
     const [todos, setTodos] = useState<Todo[]>([]);
     const [showInput, setShowInput] = useState(false); // 控制输入框的显示
     const [inputText, setInputText] = useState(''); // 输入框内容
+    const [testout, setTestout] = useState(''); // 测试输出
+    const [expandedListId, setExpandedListId] = useState<string | null>(null);
+    const [items, setItems] = useState<Todo[]>([]);
+
+    const getLists = async(): Promise<List[]> => {
+        const data = [
+            {id: '1', userID:"111", name:"hello",},
+            {id: '2', userID:"111", name:"yuna",},
+
+        ];
+        try {
+            const records = client.collection('list').getFullList();;
+            return  (await records).map(record => ({
+                id:  record.id as string,
+                userID: record.text,
+                name: record.name,
+            }));;
+        } catch (error) {
+            console.error('获取列表失败:', error);
+            return data;
+        }
+    };
     
     const getTodos = async (): Promise<Todo[]> => {
         const data = [
@@ -45,6 +74,14 @@ export default function DashboardPage() {
         };
         loadTodos();
     }, [todos]);
+
+    useEffect(() => {
+        const loadLists = async () => {
+            const respond = await getLists();
+            setLists(respond);
+        };
+        loadLists();
+    }, []);
 
     const handleAddTodo = async () => {
         // check if empty by remove space on both side of a string
@@ -76,6 +113,32 @@ export default function DashboardPage() {
             } catch (error) {
                 console.error(error);
             }
+    };
+    const handleListClick = async (list: List) => {
+        if (expandedListId === list.id) {
+            // 如果已经展开，折叠并清空 items
+            setExpandedListId(null);
+            setItems([]);
+        } else {
+            // 否则展开并获取关联 items
+            try {
+                const records = await client.collection('item').getFullList({
+                    filter: `list ~ '${list.id}'`, // 使用 filter 获取关联的 items
+                    $autoCancel: false, // 禁用自动取消
+                });
+                const data = records.map((record) => ({
+                    id:  record.id as string,
+                    text: record.text,
+                    list: record.list,
+                    done: record.done,
+                }));
+                console.log(records);
+                setExpandedListId(list.id);
+                setItems(data);
+            } catch (error) {
+                console.error('获取 items 失败:', error);
+            }
+        }
     };
          
 
@@ -205,6 +268,38 @@ export default function DashboardPage() {
                 }
             </ul>
             
+            <ul>
+                {
+                lists.map(list => (
+                        <li 
+                            key = {list.id}
+                            onClick={() => handleListClick(list)} // 点击列表触发展开/折叠
+                            style={{
+                            cursor: 'pointer',
+                            padding: '10px',
+                            color: 'black',
+                            backgroundColor: expandedListId === list.id ? '#f0f0f0' : 'white',
+                            border: '1px solid #ddd',
+                            borderRadius: '5px',
+                            marginBottom: '5px',
+                        }}>
+                            <span>
+                                {list.name}
+                            </span>
+                            {expandedListId === list.id && (
+                            <ul style={{ marginTop: '10px', paddingLeft: '20px' , background:'#C8CCD0'}}>
+                                {items.map((item) => (
+                                    <li key={item.id} style={{ marginBottom: '5px' }}>
+                                        {item.text} {item.done ? '(Completed)' : '(Pending)'}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        </li>
+                        )
+                    )
+                }
+            </ul>
         </div>
     );
 }
